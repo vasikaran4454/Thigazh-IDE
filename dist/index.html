@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<title>Thigazh IDE</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fafafc; font-family: 'Segoe UI', sans-serif; }
+  * { box-sizing: border-box; }
+  #toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: #0f1724; border-bottom: 2px solid #d4a853;
+  }
+  #toolbar .brand { color: #f0c46e; font-weight: 700; font-size: 18px; margin-right: 4px; }
+  #toolbar .title { color: #e2e8f0; font-size: 13px; margin-right: 10px; }
+  #toolbar select, #toolbar button {
+    background: #1e3a69; color: #e2e8f0; border: none; border-radius: 5px;
+    padding: 6px 10px; font-size: 12.5px; cursor: pointer;
+  }
+  #toolbar button:hover, #toolbar select:hover { background: #2b4d82; }
+  #toolbar button.primary { background: #d4a853; color: #111; font-weight: 600; }
+  #toolbar button.primary:hover { background: #e3ba68; }
+  #toolbar .filepath { color: #94a3b8; font-size: 11.5px; margin-right: 8px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #toolbar .spacer { flex: 1; }
+  #status { color: #94a3b8; font-size: 11px; padding: 0 10px; }
+  #label { color: #64748b; font-size: 11px; padding: 8px 16px 0; display: flex; align-items: center; justify-content: space-between; }
+  #label .hint { color: #b7bfca; font-size: 10.5px; }
+
+  #main { display: flex; height: calc(100vh - 90px); }
+
+  #lineNumbers {
+    width: 46px; flex-shrink: 0;
+    background: #f1f1f5; color: #a3a9b3;
+    font-family: 'Cascadia Mono', 'Consolas', monospace;
+    font-size: 15px; line-height: 1.7;
+    padding: 12px 6px 12px 0;
+    text-align: right;
+    overflow: hidden;
+    user-select: none;
+    border-right: 1px solid #e2e2e8;
+    white-space: pre;
+  }
+  #lineNumbers .cur { color: #d4a853; font-weight: 700; }
+
+  #editorWrap { position: relative; flex: 1; min-width: 0; }
+  #highlight, #editor {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    margin: 0; padding: 12px 16px;
+    font-family: 'Cascadia Mono', 'Consolas', monospace;
+    font-size: 15px; line-height: 1.7;
+    white-space: pre-wrap; word-wrap: break-word;
+    overflow: auto;
+    border: none;
+  }
+  #highlight { color: #14212e; background: #ffffff; pointer-events: none; }
+  #editor { background: transparent; color: transparent; caret-color: #14212e; resize: none; outline: none; }
+  #editor::selection { background: rgba(212,168,83,0.45); }
+
+  .tok-kw { color: #d6266a; font-weight: 600; }
+  .tok-fn { color: #0284c7; font-weight: 600; }
+  .tok-call { color: #7c3aed; font-weight: 600; }
+  .tok-var { color: #0f766e; }
+  .tok-op { color: #b91c1c; font-weight: 600; }
+  .tok-str { color: #ea7c1e; }
+  .tok-num { color: #b45309; font-weight: 600; }
+  .tok-cm { color: #94a3b8; font-style: italic; }
+
+  #findBar {
+    position: absolute; top: 8px; right: 20px; z-index: 20;
+    display: none; align-items: center; gap: 6px;
+    background: #0f1724; border: 1px solid #d4a853; border-radius: 6px;
+    padding: 6px 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  #findBar.visible { display: flex; }
+  #findBar input {
+    background: #1e3a69; color: #e2e8f0; border: none; border-radius: 4px;
+    padding: 5px 8px; font-size: 12.5px; width: 160px;
+  }
+  #findBar button {
+    background: #1e3a69; color: #e2e8f0; border: none; border-radius: 4px;
+    padding: 5px 8px; font-size: 12px; cursor: pointer;
+  }
+  #findBar button:hover { background: #2b4d82; }
+  #findBar .count { color: #94a3b8; font-size: 11px; min-width: 40px; text-align: center; }
+
+  #outputPanel {
+    width: 420px; flex-shrink: 0;
+    background: #0a0e16; color: #e2e8f0;
+    border-left: 2px solid #d4a853;
+    display: none;
+    flex-direction: column;
+  }
+  #outputPanel.visible { display: flex; }
+  #outputHeader {
+    padding: 8px 12px; background: #10192a; color: #f0c46e;
+    font-size: 12px; font-weight: 700; border-bottom: 1px solid #1e3a69;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #outputHeader .hint { color: #64748b; font-size: 10px; font-weight: 400; }
+  #outputLog {
+    flex: 1; margin: 0; padding: 12px;
+    font-family: 'Cascadia Mono', 'Consolas', monospace;
+    font-size: 12.5px; line-height: 1.6;
+    white-space: pre-wrap; word-wrap: break-word;
+    overflow: auto;
+  }
+  .err-line {
+    color: #f0c46e; text-decoration: underline; cursor: pointer;
+  }
+  .err-line:hover { color: #ffe08a; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="brand">🔥 திகழ்</span>
+    <span class="title">Thigazh IDE</span>
+    <span class="filepath" id="filepath">(unsaved)</span>
+    <button id="btnOpen">📂 Open</button>
+    <button id="btnSave">💾 Save</button>
+    <select id="board">
+      <option value="nano">nano</option>
+      <option value="uno">uno</option>
+      <option value="esp32">esp32</option>
+    </select>
+    <button id="btnCompile" class="primary">🔧 Compile</button>
+    <button id="btnFlash" class="primary">⚡ Flash</button>
+    <button id="btnToggleOutput">🗖 Output</button>
+    <div class="spacer"></div>
+    <span id="status"></span>
+  </div>
+  <div id="label">
+    <span>SOURCE (.தி)</span>
+    <span class="hint">Ctrl+S Save · Ctrl+O Open · Ctrl+Enter Compile · Ctrl+Shift+Enter Flash · Ctrl+F Find</span>
+  </div>
+
+  <div id="main">
+    <div id="lineNumbers">1</div>
+    <div id="editorWrap">
+      <div id="findBar">
+        <input type="text" id="findInput" placeholder="Find...">
+        <span class="count" id="findCount"></span>
+        <button id="findPrev">↑</button>
+        <button id="findNext">↓</button>
+        <button id="findClose">✕</button>
+      </div>
+      <pre id="highlight"></pre><textarea id="editor" spellcheck="false">| திகழ் — புது நிரல்
+
+செயல் அமைப்பு():
+    தொடர்_தொடங்கு(9600)
+
+செயல் சுழல்():
+    தொடர்_அச்சு("வணக்கம்!")
+    தாமதம்(1000)
+</textarea>
+    </div>
+    <div id="outputPanel">
+      <div id="outputHeader">
+        <span>Output</span>
+        <span class="hint">click "வரி N" to jump</span>
+      </div>
+      <pre id="outputLog">Ready.</pre>
+    </div>
+  </div>
+
+<script>
+  const invoke = window.__TAURI__.invoke;
+  const tauriDialog = window.__TAURI__.dialog;
+  const tauriFs = window.__TAURI__.fs;
+  let currentPath = null;
+
+  const editor = document.getElementById('editor');
+  const highlightEl = document.getElementById('highlight');
+  const filepathEl = document.getElementById('filepath');
+  const statusEl = document.getElementById('status');
+  const outputPanel = document.getElementById('outputPanel');
+  const outputLog = document.getElementById('outputLog');
+  const lineNumbersEl = document.getElementById('lineNumbers');
+  const findBar = document.getElementById('findBar');
+  const findInput = document.getElementById('findInput');
+  const findCount = document.getElementById('findCount');
+
+  const KEYWORDS = new Set(["செயல்","இரு","மாறா","மாறி","என்றால்","இல்லையென்றால்",
+    "வரை","ஒவ்வொன்று","உள்ளே","வரிசை","திரும்பு","நிறுத்து",
+    "உயர்","தாழ்","வெளியீடு","உள்ளீட்டு","உண்மை","பொய்","வெற்று"]);
+  const ARDUINO_FN = new Set(["முள்_திசை","எழுது","படி","அலை_எழுது","அலை_படி",
+    "தாமதம்","தொடர்_தொடங்கு","தொடர்_அச்சு"]);
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function highlight(text) {
+    let out = '';
+    let i = 0;
+    const n = text.length;
+    const isIdentChar = c => c === '_' || /[\p{L}\p{N}]/u.test(c);
+    const OPS = new Set(['+','-','*','/','=','<','>','%','!']);
+    while (i < n) {
+      const c = text[i];
+      if (c === '|' || c === '#') {
+        let start = i;
+        while (i < n && text[i] !== '\n') i++;
+        out += `<span class="tok-cm">${escapeHtml(text.slice(start, i))}</span>`;
+        continue;
+      }
+      if (c === '"') {
+        let start = i; i++;
+        while (i < n && text[i] !== '"' && text[i] !== '\n') i++;
+        if (i < n && text[i] === '"') i++;
+        out += `<span class="tok-str">${escapeHtml(text.slice(start, i))}</span>`;
+        continue;
+      }
+      if (/[0-9]/.test(c)) {
+        let start = i;
+        while (i < n && /[0-9.]/.test(text[i])) i++;
+        out += `<span class="tok-num">${escapeHtml(text.slice(start, i))}</span>`;
+        continue;
+      }
+      if (isIdentChar(c)) {
+        let start = i;
+        while (i < n && isIdentChar(text[i])) i++;
+        const word = text.slice(start, i);
+        let j = i;
+        while (j < n && text[j] === ' ') j++;
+        const isCall = text[j] === '(';
+        if (KEYWORDS.has(word)) out += `<span class="tok-kw">${escapeHtml(word)}</span>`;
+        else if (ARDUINO_FN.has(word)) out += `<span class="tok-fn">${escapeHtml(word)}</span>`;
+        else if (isCall) out += `<span class="tok-call">${escapeHtml(word)}</span>`;
+        else out += `<span class="tok-var">${escapeHtml(word)}</span>`;
+        continue;
+      }
+      if (OPS.has(c)) {
+        out += `<span class="tok-op">${escapeHtml(c)}</span>`;
+        i++;
+        continue;
+      }
+      out += escapeHtml(c);
+      i++;
+    }
+    return out + '\n';
+  }
+
+  function renderHighlight() { highlightEl.innerHTML = highlight(editor.value); }
+
+  function currentLineIndex() {
+    const upto = editor.value.slice(0, editor.selectionStart);
+    return upto.split('\n').length;
+  }
+
+  function renderLineNumbers() {
+    const totalLines = editor.value.split('\n').length;
+    const cur = currentLineIndex();
+    let html = '';
+    for (let i = 1; i <= totalLines; i++) {
+      html += (i === cur) ? `<span class="cur">${i}</span>\n` : `${i}\n`;
+    }
+    lineNumbersEl.innerHTML = html;
+  }
+
+  function syncScroll() {
+    highlightEl.scrollTop = editor.scrollTop;
+    highlightEl.scrollLeft = editor.scrollLeft;
+    lineNumbersEl.scrollTop = editor.scrollTop;
+  }
+
+  function refreshAll() {
+    renderHighlight();
+    renderLineNumbers();
+  }
+
+  editor.addEventListener('input', refreshAll);
+  editor.addEventListener('scroll', syncScroll);
+  editor.addEventListener('click', renderLineNumbers);
+  editor.addEventListener('keyup', renderLineNumbers);
+  refreshAll();
+
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = editor.selectionStart, end = editor.selectionEnd;
+      editor.value = editor.value.slice(0, start) + '    ' + editor.value.slice(end);
+      editor.selectionStart = editor.selectionEnd = start + 4;
+      refreshAll();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const start = editor.selectionStart;
+      const before = editor.value.slice(0, start);
+      const after = editor.value.slice(start);
+      const lineStart = before.lastIndexOf('\n') + 1;
+      const currentLine = before.slice(lineStart);
+      const indentMatch = currentLine.match(/^[ \t]*/);
+      let indent = indentMatch ? indentMatch[0] : '';
+      if (currentLine.trim().endsWith(':')) indent += '    ';
+      const insertion = '\n' + indent;
+      editor.value = before + insertion + after;
+      const newPos = start + insertion.length;
+      editor.selectionStart = editor.selectionEnd = newPos;
+      refreshAll();
+      return;
+    }
+  });
+
+  function setStatus(text) { statusEl.textContent = text; }
+  function setPath(p) { currentPath = p; filepathEl.textContent = p || '(unsaved)'; }
+
+  function jumpToLine(lineNum) {
+    const lines = editor.value.split('\n');
+    if (lineNum < 1 || lineNum > lines.length) return;
+    let offset = 0;
+    for (let i = 0; i < lineNum - 1; i++) offset += lines[i].length + 1;
+    const lineLen = lines[lineNum - 1].length;
+    editor.focus();
+    editor.setSelectionRange(offset, offset + lineLen);
+    renderLineNumbers();
+  }
+
+  function showOutput(text) {
+    const escaped = escapeHtml(text);
+    const withLinks = escaped
+      .replace(/வரி (\d+)/g, (m, num) => `<span class="err-line" data-line="${num}">${m}</span>`)
+      .replace(/\bline (\d+)\b/gi, (m, num) => `<span class="err-line" data-line="${num}">${m}</span>`);
+    outputLog.innerHTML = withLinks;
+    outputPanel.classList.add('visible');
+  }
+
+  outputLog.addEventListener('click', (e) => {
+    const t = e.target.closest('.err-line');
+    if (!t) return;
+    jumpToLine(parseInt(t.dataset.line, 10));
+  });
+
+  document.getElementById('btnToggleOutput').addEventListener('click', () => {
+    outputPanel.classList.toggle('visible');
+  });
+
+  document.getElementById('btnOpen').addEventListener('click', async () => {
+    try {
+      const selected = await tauriDialog.open({
+        filters: [{ name: 'Thigazh source', extensions: ['தி', '*'] }],
+        multiple: false,
+      });
+      if (!selected) return;
+      const content = await tauriFs.readTextFile(selected);
+      editor.value = content;
+      refreshAll();
+      setPath(selected);
+      setStatus('Opened.');
+    } catch (e) {
+      setStatus('Open failed: ' + e);
+    }
+  });
+
+  document.getElementById('btnSave').addEventListener('click', async () => {
+    try {
+      let target = currentPath;
+      if (!target) {
+        target = await tauriDialog.save({
+          filters: [{ name: 'Thigazh source', extensions: ['தி'] }],
+          defaultPath: 'நிரல்.தி',
+        });
+        if (!target) return;
+      }
+      await tauriFs.writeTextFile(target, editor.value);
+      setPath(target);
+      setStatus('Saved.');
+    } catch (e) {
+      setStatus('Save failed: ' + e);
+    }
+  });
+
+  async function ensureSaved() {
+    if (currentPath) {
+      await tauriFs.writeTextFile(currentPath, editor.value);
+      return currentPath;
+    }
+    const target = await tauriDialog.save({
+      filters: [{ name: 'Thigazh source', extensions: ['தி'] }],
+      defaultPath: 'நிரல்.தி',
+    });
+    if (!target) throw 'cancelled';
+    await tauriFs.writeTextFile(target, editor.value);
+    setPath(target);
+    return target;
+  }
+
+  async function runCompiler(flash) {
+    try {
+      setStatus(flash ? 'Compiling + flashing...' : 'Compiling...');
+      const path = await ensureSaved();
+      const board = document.getElementById('board').value;
+      const result = await invoke('compile', { path, board, flash });
+      showOutput(result);
+      setStatus('Done.');
+    } catch (e) {
+      if (e === 'cancelled') { setStatus('Cancelled.'); return; }
+      setStatus('Error: ' + e);
+      showOutput('Error: ' + e);
+    }
+  }
+
+  document.getElementById('btnCompile').addEventListener('click', () => runCompiler(false));
+  document.getElementById('btnFlash').addEventListener('click', () => runCompiler(true));
+
+  let findMatches = [];
+  let findIndex = -1;
+
+  function computeMatches(query) {
+    findMatches = [];
+    if (!query) return;
+    const text = editor.value;
+    let idx = 0;
+    while (true) {
+      const found = text.indexOf(query, idx);
+      if (found === -1) break;
+      findMatches.push(found);
+      idx = found + query.length;
+    }
+  }
+
+  function goToMatch(i) {
+    if (findMatches.length === 0) { findCount.textContent = '0/0'; return; }
+    findIndex = ((i % findMatches.length) + findMatches.length) % findMatches.length;
+    const start = findMatches[findIndex];
+    const query = findInput.value;
+    editor.focus();
+    editor.setSelectionRange(start, start + query.length);
+    findCount.textContent = `${findIndex + 1}/${findMatches.length}`;
+    renderLineNumbers();
+  }
+
+  findInput.addEventListener('input', () => {
+    computeMatches(findInput.value);
+    goToMatch(0);
+  });
+  document.getElementById('findNext').addEventListener('click', () => goToMatch(findIndex + 1));
+  document.getElementById('findPrev').addEventListener('click', () => goToMatch(findIndex - 1));
+  document.getElementById('findClose').addEventListener('click', () => {
+    findBar.classList.remove('visible');
+    editor.focus();
+  });
+  findInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); goToMatch(e.shiftKey ? findIndex - 1 : findIndex + 1); }
+    if (e.key === 'Escape') { findBar.classList.remove('visible'); editor.focus(); }
+  });
+
+  function openFindBar() {
+    findBar.classList.add('visible');
+    const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    if (sel) findInput.value = sel;
+    findInput.focus();
+    findInput.select();
+    computeMatches(findInput.value);
+    goToMatch(0);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      document.getElementById('btnSave').click();
+    } else if (ctrl && e.key.toLowerCase() === 'o') {
+      e.preventDefault();
+      document.getElementById('btnOpen').click();
+    } else if (ctrl && e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      runCompiler(true);
+    } else if (ctrl && e.key === 'Enter') {
+      e.preventDefault();
+      runCompiler(false);
+    } else if (ctrl && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      openFindBar();
+    }
+  });
+</script>
+</body>
+</html>
